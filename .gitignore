@@ -1,0 +1,33 @@
+# Python 虚拟环境与缓存
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# 前端依赖与构建产物
+node_modules/
+dist/
+.vite/
+
+# 本地环境配置：保留不含真实凭据的示例文件
+.env
+.env.*
+!.env.example
+
+# 日志
+*.log
+
+# 常见编译产物
+*.o
+*.obj
+*.exe
+a.out
+
+# SSH 私钥常见文件名
+id_rsa
+id_ed25519
+
+# 操作系统生成的文件
+.DS_Store
+Thumbs.db
