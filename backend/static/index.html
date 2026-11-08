@@ -3,42 +3,149 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>在线实验室连接测试</title>
+  <title>在线实验室</title>
+  <style>
+    body { max-width: 960px; margin: 32px auto; padding: 0 20px; font-family: sans-serif; line-height: 1.6; }
+    label { display: block; font-weight: bold; margin-top: 16px; }
+    textarea { display: block; box-sizing: border-box; width: 100%; padding: 12px; font-family: monospace; font-size: 15px; }
+    button { padding: 8px 16px; margin: 12px 8px 0 0; cursor: pointer; }
+    button:disabled { cursor: wait; }
+    pre { min-height: 32px; background: #f3f4f6; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+    #status { font-weight: bold; }
+  </style>
 </head>
 <body>
   <h1>在线实验室</h1>
-  <p>点击按钮，检查网页是否能够访问后端。</p>
+  <p>输入一个 C++ 程序及标准输入，点击运行查看结果。</p>
 
+  <label for="source">main.cpp</label>
+  <textarea id="source" rows="12" spellcheck="false">#include &lt;iostream&gt;
+
+int main() {
+    int a, b;
+    std::cin &gt;&gt; a &gt;&gt; b;
+    std::cout &lt;&lt; a + b &lt;&lt; '\n';
+    return 0;
+}
+</textarea>
+
+  <label for="stdin">标准输入</label>
+  <textarea id="stdin" rows="3" spellcheck="false">3 5</textarea>
+
+  <button id="run-button" type="button">运行 C++</button>
   <button id="check-button" type="button">检查连接</button>
-  <pre id="result">尚未检查</pre>
+  <p id="connection" role="status">尚未检查连接</p>
+  <p id="status" role="status">等待运行</p>
+  <p id="details"></p>
+
+  <h2>标准输出</h2>
+  <pre id="stdout">尚无结果</pre>
+  <h2>错误信息</h2>
+  <pre id="stderr">尚无结果</pre>
 
   <script>
-    const button = document.querySelector("#check-button");
-    const result = document.querySelector("#result");
+    const source = document.querySelector("#source");
+    const stdin = document.querySelector("#stdin");
+    const runButton = document.querySelector("#run-button");
+    const checkButton = document.querySelector("#check-button");
+    const connection = document.querySelector("#connection");
+    const status = document.querySelector("#status");
+    const details = document.querySelector("#details");
+    const stdout = document.querySelector("#stdout");
+    const stderr = document.querySelector("#stderr");
 
-    button.addEventListener("click", async () => {
-      button.disabled = true;
-      result.textContent = "正在连接后端……";
+    async function readJson(response) {
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch {
+        throw new Error(`HTTP ${response.status}：服务没有返回 JSON，请检查后端及 Nginx`);
+      }
+      if (data === null || typeof data !== "object" || Array.isArray(data)) {
+        throw new Error("服务返回的内容不符合接口约定");
+      }
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}：${data.message || data.error || "请求失败"}`);
+      }
+      return data;
+    }
+
+    checkButton.addEventListener("click", async () => {
+      checkButton.disabled = true;
+      connection.textContent = "正在检查连接……";
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch("/api/ping", { signal: controller.signal });
+        const data = await readJson(response);
+        if (data.ok !== true) throw new Error("健康检查结果不符合约定");
+        connection.textContent = "后端连接成功";
+      } catch (error) {
+        connection.textContent = error.name === "AbortError"
+          ? "连接检查超时，请检查服务与 SSH 连接"
+          : "连接检查失败：" + error.message;
+      } finally {
+        clearTimeout(timer);
+        checkButton.disabled = false;
+      }
+    });
+
+    runButton.addEventListener("click", async () => {
+      if (!source.value.trim()) {
+        status.textContent = "请先输入 C++ 代码";
+        return;
+      }
+      const payload = {
+        files: [{ name: "main.cpp", content: source.value }],
+        stdin: stdin.value,
+      };
+
+      runButton.disabled = true;
+      source.disabled = true;
+      stdin.disabled = true;
+      status.textContent = "正在提交并编译运行……";
+      details.textContent = "";
+      stdout.textContent = "";
+      stderr.textContent = "";
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 30000);
 
       try {
-        const response = await fetch("/api/ping");
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
+        const response = await fetch("/api/run", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller.signal,
+        });
+        const data = await readJson(response);
+        if (typeof data.stdout !== "string" || typeof data.stderr !== "string" ||
+            !Number.isInteger(data.exitCode) || !Number.isFinite(data.time) ||
+            !["compile", "run"].includes(data.stage)) {
+          throw new Error("执行结果字段不符合接口约定");
         }
 
-        const data = await response.json();
-
-        if (data.ok !== true) {
-          throw new Error("后端返回的内容不符合约定");
+        stdout.textContent = data.stdout || "（无标准输出）";
+        stderr.textContent = data.stderr || "（无错误信息）";
+        const phase = data.stage === "compile" ? "编译" : "运行";
+        details.textContent = `阶段：${phase}；退出码：${data.exitCode}；耗时：${data.time} 毫秒`;
+        if (data.exitCode === 0) {
+          status.textContent = "执行成功";
+        } else if (data.exitCode === 124) {
+          status.textContent = `${phase}超时`;
+        } else {
+          status.textContent = `${phase}失败，请查看错误信息`;
         }
-
-        result.textContent = "后端连接成功\n" +
-          JSON.stringify(data, null, 2);
       } catch (error) {
-        result.textContent = "连接失败：" + error.message;
+        status.textContent = "请求未完成";
+        stderr.textContent = error.name === "AbortError"
+          ? "浏览器等待超过 30 秒。请检查连接和服务；不要连续重复提交。"
+          : error.message;
       } finally {
-        button.disabled = false;
+        clearTimeout(timer);
+        runButton.disabled = false;
+        source.disabled = false;
+        stdin.disabled = false;
       }
     });
   </script>

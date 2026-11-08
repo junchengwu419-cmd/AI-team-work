@@ -1,0 +1,9 @@
+{
+  "files": [
+    {
+      "name": "main.cpp",
+      "content": "#include <iostream>\nint main() { int a, b; std::cin >> a >> b; std::cout << a + b << '\\n'; return 0; }\n"
+    }
+  ],
+  "stdin": "3 5\n"
+}
