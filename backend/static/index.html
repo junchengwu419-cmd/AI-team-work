@@ -12,13 +12,22 @@
     button:disabled { cursor: wait; }
     pre { min-height: 32px; background: #f3f4f6; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
     #status { font-weight: bold; }
+    #file-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+    #file-tabs button[aria-pressed="true"] { background: #174ea6; color: white; }
+    #file-name { padding: 8px; }
   </style>
 </head>
 <body>
   <h1>在线实验室</h1>
-  <p>输入一个 C++ 程序及标准输入，点击运行查看结果。</p>
+  <p>添加并编辑 .cpp 和 .h 文件，点击运行时将一起提交。</p>
+  <div id="file-tabs" aria-label="项目文件"></div>
+  <label for="file-name">新文件名</label>
+  <input id="file-name" placeholder="例如 calc.cpp 或 calc.h" maxlength="128">
+  <button id="add-file" type="button">添加文件</button>
+  <button id="delete-file" type="button">删除当前文件</button>
+  <p>切换文件时会保留本页中的修改；刷新或关闭页面会丢失代码，请另行保存。</p>
 
-  <label for="source">main.cpp</label>
+  <label id="source-label" for="source">main.cpp</label>
   <textarea id="source" rows="12" spellcheck="false">#include &lt;iostream&gt;
 
 int main() {
@@ -53,6 +62,77 @@ int main() {
     const details = document.querySelector("#details");
     const stdout = document.querySelector("#stdout");
     const stderr = document.querySelector("#stderr");
+    const tabs = document.querySelector("#file-tabs");
+    const fileName = document.querySelector("#file-name");
+    const addFile = document.querySelector("#add-file");
+    const deleteFile = document.querySelector("#delete-file");
+    const sourceLabel = document.querySelector("#source-label");
+    const files = new Map([["main.cpp", source.value]]);
+    let activeFile = "main.cpp";
+    let busy = false;
+
+    function renderTabs() {
+      tabs.replaceChildren();
+      for (const name of files.keys()) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = name;
+        button.setAttribute("aria-pressed", String(name === activeFile));
+        button.disabled = busy;
+        button.addEventListener("click", () => {
+          files.set(activeFile, source.value);
+          activeFile = name;
+          source.value = files.get(name);
+          renderTabs();
+        });
+        tabs.append(button);
+      }
+      sourceLabel.textContent = activeFile;
+      deleteFile.disabled = busy || files.size === 1;
+    }
+
+    function setBusy(value) {
+      busy = value;
+      for (const control of [runButton, source, stdin, fileName, addFile]) {
+        control.disabled = value;
+      }
+      renderTabs();
+    }
+
+    source.addEventListener("input", () => files.set(activeFile, source.value));
+    addFile.addEventListener("click", () => {
+      const name = fileName.value.trim();
+      if (!/^[A-Za-z0-9_.-]{1,128}$/.test(name) || !/\.(cpp|h)$/.test(name)) {
+        status.textContent = "文件名请使用英文字母、数字、下划线、短横线或点，并以 .cpp 或 .h 结尾";
+        return;
+      }
+      if (files.has(name)) {
+        status.textContent = "已经有同名文件，请换一个名称";
+        return;
+      }
+      if (files.size >= 10) {
+        status.textContent = "最多添加 10 个文件";
+        return;
+      }
+      files.set(activeFile, source.value);
+      files.set(name, "");
+      activeFile = name;
+      source.value = "";
+      fileName.value = "";
+      renderTabs();
+      status.textContent = "已添加 " + name;
+      source.focus();
+    });
+    deleteFile.addEventListener("click", () => {
+      if (files.size === 1 || busy) return;
+      if (!confirm("确定删除 " + activeFile + "？该文件的代码将被移除。")) return;
+      files.delete(activeFile);
+      activeFile = files.keys().next().value;
+      source.value = files.get(activeFile);
+      renderTabs();
+      status.textContent = "已删除文件";
+    });
+    renderTabs();
 
     async function readJson(response) {
       const text = await response.text();
@@ -92,18 +172,17 @@ int main() {
     });
 
     runButton.addEventListener("click", async () => {
-      if (!source.value.trim()) {
-        status.textContent = "请先输入 C++ 代码";
+      files.set(activeFile, source.value);
+      if (![...files].some(([name, content]) => name.endsWith(".cpp") && content.trim())) {
+        status.textContent = "请至少提供一个包含代码的 .cpp 文件";
         return;
       }
       const payload = {
-        files: [{ name: "main.cpp", content: source.value }],
+        files: [...files].map(([name, content]) => ({ name, content })),
         stdin: stdin.value,
       };
 
-      runButton.disabled = true;
-      source.disabled = true;
-      stdin.disabled = true;
+      setBusy(true);
       status.textContent = "正在提交并编译运行……";
       details.textContent = "";
       stdout.textContent = "";
@@ -143,9 +222,7 @@ int main() {
           : error.message;
       } finally {
         clearTimeout(timer);
-        runButton.disabled = false;
-        source.disabled = false;
-        stdin.disabled = false;
+        setBusy(false);
       }
     });
   </script>
