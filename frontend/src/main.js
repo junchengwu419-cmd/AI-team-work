@@ -1,5 +1,6 @@
 import * as monaco from 'monaco-editor';
 import EditorWorker from '../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker';
+import { setupRun } from './run.js';
 
 self.MonacoEnvironment = {
   getWorker() {
@@ -28,3 +29,5 @@ const editor = monaco.editor.create(
 document.querySelector('#read-code').addEventListener('click', () => {
   document.querySelector('#result').textContent = editor.getValue();
 });
+
+setupRun(editor);
