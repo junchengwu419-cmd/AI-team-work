@@ -34,4 +34,8 @@ document.querySelector('#read-code').addEventListener('click', () => {
 });
 
 const fileManager = setupFiles(editor, monaco);
-setupRun(editor, () => fileManager.getFiles());
+setupRun(
+  editor,
+  () => fileManager.getFiles(),
+  location => fileManager.goTo(location)
+);

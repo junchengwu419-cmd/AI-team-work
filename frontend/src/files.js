@@ -92,6 +92,19 @@ export function setupFiles(editor, monaco) {
 
   render();
   return {
+    goTo({ name, lineNumber, column }) {
+      if (isLocked()) return;
+      if (!files.has(name)) {
+        window.alert('该文件已不存在，请重新运行以更新错误信息。');
+        return;
+      }
+      switchTo(name);
+      const position = files.get(name).model.validatePosition({ lineNumber, column });
+      editor.setPosition(position);
+      editor.revealPositionInCenter(position);
+      editor.focus();
+      document.getElementById('editor').scrollIntoView({ block: 'center' });
+    },
     getFiles() {
       return [...files].map(([name, file]) => ({
         name,
