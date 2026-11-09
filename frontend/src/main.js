@@ -2,6 +2,7 @@ import * as monaco from 'monaco-editor';
 import EditorWorker from '../node_modules/monaco-editor/esm/vs/editor/editor.worker.js?worker';
 import { setupRun } from './run.js';
 import { setupFiles } from './files.js';
+import { setupDraft } from './drafts.js';
 
 self.MonacoEnvironment = {
   getWorker() {
@@ -34,6 +35,7 @@ document.querySelector('#read-code').addEventListener('click', () => {
 });
 
 const fileManager = setupFiles(editor, monaco);
+setupDraft(fileManager);
 setupRun(
   editor,
   () => fileManager.getFiles(),

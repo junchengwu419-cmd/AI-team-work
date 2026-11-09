@@ -16,6 +16,11 @@ export function setupFiles(editor, monaco) {
   let current = 'main.cpp';
   const markerOwner = 'online-lab-gcc';
   const subscriptions = new Map();
+  const changeListeners = new Set();
+
+  function notifyChange() {
+    for (const listener of changeListeners) listener();
+  }
 
   function clearDiagnostics() {
     for (const file of files.values()) {
@@ -25,7 +30,10 @@ export function setupFiles(editor, monaco) {
 
   function watchModel(model) {
     // 任一文件改动都可能改变其他文件的编译结果，清除全部旧标记。
-    subscriptions.set(model, model.onDidChangeContent(clearDiagnostics));
+    subscriptions.set(model, model.onDidChangeContent(() => {
+      clearDiagnostics();
+      notifyChange();
+    }));
   }
 
   function setDiagnostics(items) {
@@ -85,6 +93,7 @@ export function setupFiles(editor, monaco) {
     if (file.view) editor.restoreViewState(file.view);
     select.value = current;
     editor.focus();
+    notifyChange();
   }
 
   select.addEventListener('change', () => {
@@ -137,10 +146,51 @@ export function setupFiles(editor, monaco) {
     deletedModel.dispose();
     clearDiagnostics();
     render();
+    notifyChange();
   });
 
   render();
   return {
+    onChange(listener) {
+      changeListeners.add(listener);
+      return () => changeListeners.delete(listener);
+    },
+    canEdit() {
+      return !isLocked();
+    },
+    getSnapshot() {
+      return {
+        files: [...files].map(([name, file]) => ({ name, content: file.model.getValue() })),
+        activeFile: current
+      };
+    },
+    restoreSnapshot(snapshot) {
+      if (isLocked()) return false;
+      const created = new Map();
+      try {
+        for (const file of snapshot.files) {
+          created.set(file.name, { model: monaco.editor.createModel(file.content, 'cpp'), view: null });
+        }
+        editor.setModel(created.get(snapshot.activeFile).model);
+      } catch (error) {
+        for (const file of created.values()) file.model.dispose();
+        throw error;
+      }
+      for (const file of files.values()) {
+        subscriptions.get(file.model)?.dispose();
+        file.model.dispose();
+      }
+      subscriptions.clear();
+      files.clear();
+      for (const [name, file] of created) {
+        files.set(name, file);
+        watchModel(file.model);
+      }
+      current = snapshot.activeFile;
+      render();
+      notifyChange();
+      return true;
+    },
     clearDiagnostics,
     setDiagnostics,
     goTo({ name, lineNumber, column }) {
