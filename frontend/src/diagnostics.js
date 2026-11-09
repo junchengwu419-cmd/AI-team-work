@@ -28,3 +28,15 @@ export function showDiagnostics(container, text, onNavigate) {
     if (index < lines.length - 1) container.append(document.createTextNode('\n'));
   });
 }
+
+// 只解析学生文件中的 GCC 诊断；普通输出和系统头文件保持原样显示。
+export function collectDiagnostics(text) {
+  const result = [];
+  for (const line of text.split('\n')) {
+    const location = parseDiagnosticLine(line);
+    if (!location) continue;
+    const detail = /:\s*(fatal error|error|warning|note):\s*(.*)$/.exec(line);
+    if (detail) result.push({ ...location, kind: detail[1], message: detail[2] || line });
+  }
+  return result;
+}

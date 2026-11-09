@@ -37,5 +37,6 @@ const fileManager = setupFiles(editor, monaco);
 setupRun(
   editor,
   () => fileManager.getFiles(),
-  location => fileManager.goTo(location)
+  location => fileManager.goTo(location),
+  items => fileManager.setDiagnostics(items)
 );

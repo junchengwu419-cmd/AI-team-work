@@ -1,8 +1,8 @@
-import { showDiagnostics } from './diagnostics.js';
+import { showDiagnostics, collectDiagnostics } from './diagnostics.js';
 
 // 负责把 Monaco 中的代码交给已有 /api/run 接口。
 // main.js 传入编辑器、收集文件的方法和错误定位方法。
-export function setupRun(editor, getFiles, onNavigate) {
+export function setupRun(editor, getFiles, onNavigate, onDiagnostics = () => {}) {
   const ids = ['run-code', 'stdin', 'run-status', 'stdout', 'stderr'];
   const nodes = ids.map((id) => document.getElementById(id));
   const missing = ids.filter((id, index) => !nodes[index]);
@@ -30,6 +30,7 @@ export function setupRun(editor, getFiles, onNavigate) {
       files,
       stdin: stdin.value
     };
+    onDiagnostics([]);
     running = true;
     button.disabled = true;
     stdin.disabled = true;
@@ -66,6 +67,7 @@ export function setupRun(editor, getFiles, onNavigate) {
 
       stdout.textContent = data.stdout || '（无标准输出）';
       if (data.stage === 'compile' && data.stderr) {
+        onDiagnostics(collectDiagnostics(data.stderr));
         showDiagnostics(stderr, data.stderr, onNavigate);
       } else {
         stderr.textContent = data.stderr || '（无错误信息）';

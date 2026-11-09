@@ -14,6 +14,49 @@ export function setupFiles(editor, monaco) {
     ['main.cpp', { model: initialModel, view: null }]
   ]);
   let current = 'main.cpp';
+  const markerOwner = 'online-lab-gcc';
+  const subscriptions = new Map();
+
+  function clearDiagnostics() {
+    for (const file of files.values()) {
+      monaco.editor.setModelMarkers(file.model, markerOwner, []);
+    }
+  }
+
+  function watchModel(model) {
+    // 任一文件改动都可能改变其他文件的编译结果，清除全部旧标记。
+    subscriptions.set(model, model.onDidChangeContent(clearDiagnostics));
+  }
+
+  function setDiagnostics(items) {
+    clearDiagnostics();
+    const groups = new Map();
+    for (const item of items) {
+      if (!files.has(item.name)) continue;
+      const model = files.get(item.name).model;
+      const position = model.validatePosition(item);
+      const maxColumn = model.getLineMaxColumn(position.lineNumber);
+      const startColumn = position.column === maxColumn && maxColumn > 1
+        ? maxColumn - 1 : position.column;
+      const severity = item.kind === 'warning' ? monaco.MarkerSeverity.Warning
+        : item.kind === 'note' ? monaco.MarkerSeverity.Info : monaco.MarkerSeverity.Error;
+      if (!groups.has(item.name)) groups.set(item.name, []);
+      groups.get(item.name).push({
+        severity,
+        message: item.message,
+        source: 'GCC',
+        startLineNumber: position.lineNumber,
+        endLineNumber: position.lineNumber,
+        startColumn,
+        endColumn: Math.min(maxColumn, startColumn + 1)
+      });
+    }
+    for (const [name, markers] of groups) {
+      monaco.editor.setModelMarkers(files.get(name).model, markerOwner, markers);
+    }
+  }
+
+  watchModel(initialModel);
 
   function isLocked() {
     if (!editor.getOption(monaco.editor.EditorOption.readOnly)) return false;
@@ -68,7 +111,10 @@ export function setupFiles(editor, monaco) {
       window.alert('最多添加 10 个文件。');
       return;
     }
-    files.set(name, { model: monaco.editor.createModel('', 'cpp'), view: null });
+    clearDiagnostics();
+    const model = monaco.editor.createModel('', 'cpp');
+    watchModel(model);
+    files.set(name, { model, view: null });
     switchTo(name);
     input.value = '';
     render();
@@ -85,13 +131,18 @@ export function setupFiles(editor, monaco) {
     const deletedName = current;
     const deletedModel = files.get(deletedName).model;
     switchTo(otherNames[0]);
+    subscriptions.get(deletedModel)?.dispose();
+    subscriptions.delete(deletedModel);
     files.delete(deletedName);
     deletedModel.dispose();
+    clearDiagnostics();
     render();
   });
 
   render();
   return {
+    clearDiagnostics,
+    setDiagnostics,
     goTo({ name, lineNumber, column }) {
       if (isLocked()) return;
       if (!files.has(name)) {
