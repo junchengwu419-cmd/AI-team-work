@@ -1,6 +1,6 @@
 // 负责把 Monaco 中的代码交给已有 /api/run 接口。
 // main.js 创建 editor 后调用 setupRun(editor)。
-export function setupRun(editor) {
+export function setupRun(editor, getFiles) {
   const ids = ['run-code', 'stdin', 'run-status', 'stdout', 'stderr'];
   const nodes = ids.map((id) => document.getElementById(id));
   const missing = ids.filter((id, index) => !nodes[index]);
@@ -15,14 +15,17 @@ export function setupRun(editor) {
 
   button.addEventListener('click', async () => {
     if (running) return;
-    const code = editor.getValue();
-    if (!code.trim()) {
-      status.textContent = '请先输入代码';
+    const files = getFiles();
+
+    if (!files.some(file =>
+       file.name.endsWith('.cpp') && file.content.trim()
+  )) {
+      status.textContent = '请至少在一个 .cpp 文件中输入代码';
       return;
     }
 
     const payload = {
-      files: [{ name: 'main.cpp', content: code }],
+      files,
       stdin: stdin.value
     };
     running = true;

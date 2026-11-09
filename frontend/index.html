@@ -31,7 +31,25 @@
 </head>
 <body>
   <h1>在线实验室</h1>
+<fieldset id="file-controls">
+  <legend>代码文件</legend>
 
+  <label for="file-select">当前文件</label>
+  <select id="file-select">
+    <option value="main.cpp">main.cpp</option>
+  </select>
+
+  <label for="new-file-name">新文件名</label>
+  <input
+    id="new-file-name"
+    type="text"
+    placeholder="例如 calc.cpp"
+    maxlength="128"
+  >
+
+  <button id="add-file" type="button">添加文件</button>
+  <button id="delete-file" type="button">删除当前文件</button>
+</fieldset>
   <div id="editor"></div>
 
   <button id="read-code" type="button">读取编辑器代码</button>
