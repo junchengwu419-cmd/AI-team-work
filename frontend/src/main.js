@@ -3,6 +3,7 @@ import EditorWorker from '../node_modules/monaco-editor/esm/vs/editor/editor.wor
 import { setupRun } from './run.js';
 import { setupFiles } from './files.js';
 import { setupDraft } from './drafts.js';
+import { setupHistory } from './history.js';
 
 self.MonacoEnvironment = {
   getWorker() {
@@ -42,3 +43,4 @@ setupRun(
   location => fileManager.goTo(location),
   items => fileManager.setDiagnostics(items)
 );
+setupHistory();
