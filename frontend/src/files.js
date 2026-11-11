@@ -14,6 +14,57 @@ export function setupFiles(editor, monaco) {
     ['main.cpp', { model: initialModel, view: null }]
   ]);
   let current = 'main.cpp';
+  const markerOwner = 'online-lab-gcc';
+  const subscriptions = new Map();
+  const changeListeners = new Set();
+
+  function notifyChange() {
+    for (const listener of changeListeners) listener();
+  }
+
+  function clearDiagnostics() {
+    for (const file of files.values()) {
+      monaco.editor.setModelMarkers(file.model, markerOwner, []);
+    }
+  }
+
+  function watchModel(model) {
+    // 任一文件改动都可能改变其他文件的编译结果，清除全部旧标记。
+    subscriptions.set(model, model.onDidChangeContent(() => {
+      clearDiagnostics();
+      notifyChange();
+    }));
+  }
+
+  function setDiagnostics(items) {
+    clearDiagnostics();
+    const groups = new Map();
+    for (const item of items) {
+      if (!files.has(item.name)) continue;
+      const model = files.get(item.name).model;
+      const position = model.validatePosition(item);
+      const maxColumn = model.getLineMaxColumn(position.lineNumber);
+      const startColumn = position.column === maxColumn && maxColumn > 1
+        ? maxColumn - 1 : position.column;
+      const severity = item.kind === 'warning' ? monaco.MarkerSeverity.Warning
+        : item.kind === 'note' ? monaco.MarkerSeverity.Info : monaco.MarkerSeverity.Error;
+      if (!groups.has(item.name)) groups.set(item.name, []);
+      groups.get(item.name).push({
+        severity,
+        message: item.message,
+        source: 'GCC',
+        startLineNumber: position.lineNumber,
+        endLineNumber: position.lineNumber,
+        startColumn,
+        endColumn: Math.min(maxColumn, startColumn + 1)
+      });
+    }
+    for (const [name, markers] of groups) {
+      monaco.editor.setModelMarkers(files.get(name).model, markerOwner, markers);
+    }
+  }
+
+  watchModel(initialModel);
 
   function isLocked() {
     if (!editor.getOption(monaco.editor.EditorOption.readOnly)) return false;
@@ -42,6 +93,7 @@ export function setupFiles(editor, monaco) {
     if (file.view) editor.restoreViewState(file.view);
     select.value = current;
     editor.focus();
+    notifyChange();
   }
 
   select.addEventListener('change', () => {
@@ -68,7 +120,10 @@ export function setupFiles(editor, monaco) {
       window.alert('最多添加 10 个文件。');
       return;
     }
-    files.set(name, { model: monaco.editor.createModel('', 'cpp'), view: null });
+    clearDiagnostics();
+    const model = monaco.editor.createModel('', 'cpp');
+    watchModel(model);
+    files.set(name, { model, view: null });
     switchTo(name);
     input.value = '';
     render();
@@ -85,13 +140,72 @@ export function setupFiles(editor, monaco) {
     const deletedName = current;
     const deletedModel = files.get(deletedName).model;
     switchTo(otherNames[0]);
+    subscriptions.get(deletedModel)?.dispose();
+    subscriptions.delete(deletedModel);
     files.delete(deletedName);
     deletedModel.dispose();
+    clearDiagnostics();
     render();
+    notifyChange();
   });
 
   render();
   return {
+    onChange(listener) {
+      changeListeners.add(listener);
+      return () => changeListeners.delete(listener);
+    },
+    canEdit() {
+      return !isLocked();
+    },
+    getSnapshot() {
+      return {
+        files: [...files].map(([name, file]) => ({ name, content: file.model.getValue() })),
+        activeFile: current
+      };
+    },
+    restoreSnapshot(snapshot) {
+      if (isLocked()) return false;
+      const created = new Map();
+      try {
+        for (const file of snapshot.files) {
+          created.set(file.name, { model: monaco.editor.createModel(file.content, 'cpp'), view: null });
+        }
+        editor.setModel(created.get(snapshot.activeFile).model);
+      } catch (error) {
+        for (const file of created.values()) file.model.dispose();
+        throw error;
+      }
+      for (const file of files.values()) {
+        subscriptions.get(file.model)?.dispose();
+        file.model.dispose();
+      }
+      subscriptions.clear();
+      files.clear();
+      for (const [name, file] of created) {
+        files.set(name, file);
+        watchModel(file.model);
+      }
+      current = snapshot.activeFile;
+      render();
+      notifyChange();
+      return true;
+    },
+    clearDiagnostics,
+    setDiagnostics,
+    goTo({ name, lineNumber, column }) {
+      if (isLocked()) return;
+      if (!files.has(name)) {
+        window.alert('该文件已不存在，请重新运行以更新错误信息。');
+        return;
+      }
+      switchTo(name);
+      const position = files.get(name).model.validatePosition({ lineNumber, column });
+      editor.setPosition(position);
+      editor.revealPositionInCenter(position);
+      editor.focus();
+      document.getElementById('editor').scrollIntoView({ block: 'center' });
+    },
     getFiles() {
       return [...files].map(([name, file]) => ({
         name,

@@ -1,6 +1,8 @@
+import { showDiagnostics, collectDiagnostics } from './diagnostics.js';
+
 // 负责把 Monaco 中的代码交给已有 /api/run 接口。
-// main.js 创建 editor 后调用 setupRun(editor)。
-export function setupRun(editor, getFiles) {
+// main.js 传入编辑器、收集文件的方法和错误定位方法。
+export function setupRun(editor, getFiles, onNavigate, onDiagnostics = () => {}) {
   const ids = ['run-code', 'stdin', 'run-status', 'stdout', 'stderr'];
   const nodes = ids.map((id) => document.getElementById(id));
   const missing = ids.filter((id, index) => !nodes[index]);
@@ -28,6 +30,7 @@ export function setupRun(editor, getFiles) {
       files,
       stdin: stdin.value
     };
+    onDiagnostics([]);
     running = true;
     button.disabled = true;
     stdin.disabled = true;
@@ -63,7 +66,12 @@ export function setupRun(editor, getFiles) {
       }
 
       stdout.textContent = data.stdout || '（无标准输出）';
-      stderr.textContent = data.stderr || '（无错误信息）';
+      if (data.stage === 'compile' && data.stderr) {
+        onDiagnostics(collectDiagnostics(data.stderr));
+        showDiagnostics(stderr, data.stderr, onNavigate);
+      } else {
+        stderr.textContent = data.stderr || '（无错误信息）';
+      }
       const phase = data.stage === 'compile' ? '编译' : '运行';
       const outcome = data.exitCode === 0 ? '成功' : data.exitCode === 124 ? '超时' : '失败';
       status.textContent = `${phase}${outcome}；退出码：${data.exitCode}；耗时：${data.time} 毫秒`;
