@@ -18,7 +18,10 @@ from pathlib import Path
 LOG = logging.getLogger(__name__)
 OUTPUT_LIMIT = 100_000
 TASK_TIMEOUT = 20
-_TASK_SLOT = threading.BoundedSemaphore(1)
+_WAIT_FOR_SANDBOX_SECONDS = 8
+# 单个后端进程最多接纳 5 个运行请求，其中最多 2 个可以同时启动沙箱。
+_REQUEST_SLOTS = threading.BoundedSemaphore(5)
+_TASK_SLOT = threading.BoundedSemaphore(2)
 
 
 class RequestError(ValueError):
@@ -180,12 +183,17 @@ def _remove_container(name):
 
 def run_code(files, stdin=""):
     checked, input_bytes = validate_request(files, stdin)
-    if not _TASK_SLOT.acquire(blocking=False):
-        raise SandboxBusy("当前已有任务运行，请稍后重试")
+    if not _REQUEST_SLOTS.acquire(blocking=False):
+        raise SandboxBusy("运行请求已满，请稍后重试")
     try:
-        return _run_checked(checked, input_bytes)
+        if not _TASK_SLOT.acquire(timeout=_WAIT_FOR_SANDBOX_SECONDS):
+            raise SandboxBusy("等待沙箱超时，请稍后重试")
+        try:
+            return _run_checked(checked, input_bytes)
+        finally:
+            _TASK_SLOT.release()
     finally:
-        _TASK_SLOT.release()
+        _REQUEST_SLOTS.release()
 
 
 def _run_checked(checked, input_bytes):
