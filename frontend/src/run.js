@@ -1,4 +1,20 @@
 import { showDiagnostics, collectDiagnostics } from './diagnostics.js';
+export function getResultLabel(stage, exitCode) {
+  const phase = stage === 'compile' ? '编译' : '运行';
+
+  if (exitCode === 0) return `${phase}成功`;
+  if (exitCode === 124) return `${phase}超时`;
+
+  if (stage === 'run') {
+    switch (exitCode) {
+      case 134: return '程序异常终止';
+      case 136: return '算术错误';
+      case 139: return '内存访问越界';
+    }
+  }
+
+  return `${phase}失败`;
+}
 
 // 负责把 Monaco 中的代码交给已有 /api/run 接口。
 // main.js 传入编辑器、收集文件的方法和错误定位方法。
@@ -72,9 +88,8 @@ export function setupRun(editor, getFiles, onNavigate, onDiagnostics = () => {})
       } else {
         stderr.textContent = data.stderr || '（无错误信息）';
       }
-      const phase = data.stage === 'compile' ? '编译' : '运行';
-      const outcome = data.exitCode === 0 ? '成功' : data.exitCode === 124 ? '超时' : '失败';
-      status.textContent = `${phase}${outcome}；退出码：${data.exitCode}；耗时：${data.time} 毫秒`;
+      const label = getResultLabel(data.stage, data.exitCode);
+      status.textContent = `${label}；退出码：${data.exitCode}；耗时：${data.time} 毫秒`;
     } catch (error) {
       status.textContent = '请求未完成';
       stderr.textContent = error.name === 'AbortError'

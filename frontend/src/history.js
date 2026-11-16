@@ -1,4 +1,5 @@
 // 历史列表和详情只供回看，使用后端的 /api/history 接口。
+import { getResultLabel } from './run.js';
 export function setupHistory() {
   const refresh = document.getElementById('history-refresh');
   const select = document.getElementById('history-select');
@@ -57,9 +58,8 @@ export function setupHistory() {
         const option = document.createElement('option');
         option.value = item.id;
         const time = new Date(item.createdAt).toLocaleString();
-        const phase = item.stage === 'compile' ? '编译' : '运行';
-        const outcome = item.exitCode === 0 ? '成功' : item.exitCode === 124 ? '超时' : '失败';
-        option.textContent = `${time} · ${phase}${outcome} · ${item.fileNames.join(', ')}`;
+        const label = getResultLabel(item.stage, item.exitCode);
+        option.textContent = `${time} · ${label} · ${item.fileNames.join(', ')}`;
         select.append(option);
       }
       status.textContent = data.items.length
