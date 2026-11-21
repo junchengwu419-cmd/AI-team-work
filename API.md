@@ -162,7 +162,7 @@ HTTP 200
 
 找不到该记录或当前浏览器无法访问该记录时返回 HTTP 404。读取存储失败时返回 HTTP 500。
 
-## 8. 课堂题目与教师发布
+## 8. 课堂题目与教师管理
 
 | 请求 | 网页上的操作 | 成功响应 |
 | --- | --- | --- |
@@ -170,10 +170,12 @@ HTTP 200
 | `POST /api/problems` | 教师填写题目后点击发布 | HTTP 201，返回保存后的题目 |
 | `GET /api/problems` | 学生打开「课堂题目」或刷新列表 | HTTP 200，返回题目摘要列表 |
 | `GET /api/problems/<problem_id>` | 学生选中一道题 | HTTP 200，返回题目说明和公开用例 |
+| `PUT /api/problems/<problem_id>` | 教师保存对一道已发布题目的修改 | HTTP 200，返回更新后的完整题目 |
+| `DELETE /api/problems/<problem_id>` | 教师确认删除一道题 | HTTP 200，返回被删除题目的编号 |
 
 ### 教师口令
 
-取表单和发布题目都要在请求头 `Authorization` 中带上教师口令。后端用服务配置中的 `ONLINE_LAB_TEACHER_TOKEN` 核对。下面的 `<教师发布口令>` 代表教师当次输入的值。学生读取列表和详情可以直接访问。
+取表单、发布、编辑和删除题目都要在请求头 `Authorization` 中带上教师口令。后端用服务配置中的 `ONLINE_LAB_TEACHER_TOKEN` 核对。下面的 `<教师发布口令>` 代表教师当次输入的值。学生读取列表和详情可以直接访问。
 
 ### 取发题表单
 
@@ -258,14 +260,33 @@ Content-Type: application/json
 
 `GET /api/problems/<problem_id>` 使用列表中拿到的 `id` 读完整题目。找到时返回 HTTP 200，JSON 字段与发布成功的响应相同。学生可以展示说明和公开用例，把 `stdin` 填入运行区。实际试跑仍使用原来的 `POST /api/run`。
 
+### 编辑已发布题目
+
+```http
+PUT /api/problems/<problem_id>
+Authorization: Bearer <教师发布口令>
+Content-Type: application/json
+```
+
+请求体提交修改后的完整标题、说明和公开用例，字段及限制与发布时相同。成功返回 HTTP 200 和更新后的题目，沿用原有的 `id` 和 `createdAt`。用同一个编号重新读取详情即可看到修改后的内容。
+
+### 删除已发布题目
+
+```http
+DELETE /api/problems/<problem_id>
+Authorization: Bearer <教师发布口令>
+```
+
+请求体可以为空。成功返回 HTTP 200 和 `{"id":"1234567890abcdef1234567890abcdef"}`。再次读取列表时，该题不会出现，直接访问该题的详情会返回 HTTP 404。
+
 ### 常见失败响应
 
-错误 JSON 包含 `error` 和 `message`。教师接口先核对口令，发布接口再检查题目内容。
+错误 JSON 包含 `error` 和 `message`。教师接口先核对口令，发布和编辑接口还会检查题目内容。
 
 | HTTP 状态码 | `error` | 出现的情况 |
 | --- | --- | --- |
-| 400 | `bad_request` | 发布请求的 JSON 无效，或标题、说明、用例不合要求。 |
-| 401 | `unauthorized` | 取表单或发布时缺少口令，或所填口令不正确。 |
-| 404 | `not_found` | 读取题目详情时，题号格式无效或找不到对应题目。 |
+| 400 | `bad_request` | 发布或编辑请求的 JSON 无效，或标题、说明、用例不合要求。 |
+| 401 | `unauthorized` | 教师接口缺少口令，或所填口令不正确。 |
+| 404 | `not_found` | 读取详情、编辑或删除时，题号格式无效或找不到对应题目。 |
 | 413 | `bad_request` | 请求体过大并由 Flask 拒绝时。 |
-| 503 | `unavailable` | 取表单或发布时，后端未配置教师发布口令。 |
+| 503 | `unavailable` | 后端未配置教师发布口令，教师接口不可用。 |

@@ -53,8 +53,12 @@ def problems_list():
 def problem_detail(problem_id):
     problem = problem_store.get(problem_id)
     if problem is None:
-        return jsonify({"error": "not_found", "message": "找不到这道题"}), 404
+        return problem_not_found()
     return jsonify(problem)
+
+
+def problem_not_found():
+    return jsonify({"error": "not_found", "message": "找不到这道题"}), 404
 
 
 def teacher_access_error():
@@ -92,6 +96,32 @@ def problem_publish():
     except ValueError as error:
         return jsonify({"error": "bad_request", "message": str(error)}), 400
     return jsonify(problem), 201
+
+
+@app.put("/api/problems/<problem_id>")
+def problem_update(problem_id):
+    error = teacher_access_error()
+    if error is not None:
+        return error
+
+    try:
+        problem = problem_store.update(problem_id, request.get_json(silent=True))
+    except ValueError as error:
+        return jsonify({"error": "bad_request", "message": str(error)}), 400
+    if problem is None:
+        return problem_not_found()
+    return jsonify(problem)
+
+
+@app.delete("/api/problems/<problem_id>")
+def problem_delete(problem_id):
+    error = teacher_access_error()
+    if error is not None:
+        return error
+
+    if not problem_store.delete(problem_id):
+        return problem_not_found()
+    return jsonify({"id": problem_id})
 
 
 @app.errorhandler(413)
