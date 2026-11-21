@@ -4,6 +4,7 @@ import { setupRun } from './run.js';
 import { setupFiles } from './files.js';
 import { setupDraft } from './drafts.js';
 import { setupHistory } from './history.js';
+import { setupStudentProblems } from './problems.js';
 
 self.MonacoEnvironment = {
   getWorker() {
@@ -44,3 +45,4 @@ setupRun(
   items => fileManager.setDiagnostics(items)
 );
 setupHistory();
+setupStudentProblems();
