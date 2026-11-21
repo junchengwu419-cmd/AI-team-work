@@ -7,6 +7,7 @@ from flask import Flask, jsonify, request
 
 from backend.executor import RequestError, SandboxBusy, SandboxError, run_code
 from backend.history_store import HistoryStore
+from backend.problem_store import ProblemStore
 
 
 app = Flask(__name__)
@@ -17,6 +18,10 @@ history_directory = os.environ.get("ONLINE_LAB_HISTORY_DIR")
 if not history_directory:
     history_directory = Path.home() / "online-lab-data" / "history"
 history_store = HistoryStore(history_directory, max_records=20)
+problem_store = ProblemStore(
+    os.environ.get("ONLINE_LAB_PROBLEMS_DIR") or Path.home() / "online-lab-data" / "problems"
+)
+app.config["TEACHER_PUBLISH_TOKEN"] = os.environ.get("ONLINE_LAB_TEACHER_TOKEN", "")
 
 
 def get_history_owner():
@@ -35,6 +40,39 @@ def ping():
 @app.get("/")
 def index():
     return app.send_static_file("index.html")
+
+
+@app.get("/api/problems")
+def problems_list():
+    response = jsonify({"items": problem_store.list()})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.get("/api/problems/<problem_id>")
+def problem_detail(problem_id):
+    problem = problem_store.get(problem_id)
+    if problem is None:
+        return jsonify({"error": "not_found", "message": "找不到这道题"}), 404
+    return jsonify(problem)
+
+
+@app.post("/api/problems")
+def problem_publish():
+    token = app.config["TEACHER_PUBLISH_TOKEN"]
+    if not token:
+        return jsonify({"error": "unavailable", "message": "教师发布暂未启用"}), 503
+    scheme, _, supplied = request.headers.get("Authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not secrets.compare_digest(
+        supplied.encode("utf-8"), token.encode("utf-8")
+    ):
+        return jsonify({"error": "unauthorized", "message": "教师发布口令不正确"}), 401
+
+    try:
+        problem = problem_store.publish(request.get_json(silent=True))
+    except ValueError as error:
+        return jsonify({"error": "bad_request", "message": str(error)}), 400
+    return jsonify(problem), 201
 
 
 @app.errorhandler(413)
