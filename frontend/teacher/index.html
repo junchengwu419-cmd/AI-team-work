@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>教师端 - 在线实验室</title>
+  <style>
+    body {
+      max-width: 1000px;
+      margin: 24px auto;
+      padding: 0 16px;
+      font-family: sans-serif;
+    }
+
+    fieldset {
+      margin: 16px 0;
+    }
+
+    label {
+      display: block;
+      margin: 12px 0;
+    }
+
+    input, textarea {
+      display: block;
+      width: min(100%, 36rem);
+      box-sizing: border-box;
+    }
+
+    button {
+      margin-top: 16px;
+      padding: 8px 16px;
+    }
+  </style>
+</head>
+<body>
+  <a href="/">返回实验室</a>
+  <h1>教师端</h1>
+
+  <form id="teacher-access" method="post" action="/api/teacher/form" autocomplete="off">
+    <label for="teacher-token">教师发布口令</label>
+    <input id="teacher-token" type="password" required>
+    <button id="teacher-open" type="submit">验证并进入发题页</button>
+    <p id="teacher-access-status" role="status"></p>
+  </form>
+  <section id="teacher-view" hidden></section>
+
+  <script type="module" src="/src/teacher.js"></script>
+</body>
+</html>

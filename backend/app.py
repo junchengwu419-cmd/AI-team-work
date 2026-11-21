@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 import secrets
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 
 from backend.executor import RequestError, SandboxBusy, SandboxError, run_code
 from backend.history_store import HistoryStore
@@ -57,8 +57,7 @@ def problem_detail(problem_id):
     return jsonify(problem)
 
 
-@app.post("/api/problems")
-def problem_publish():
+def teacher_access_error():
     token = app.config["TEACHER_PUBLISH_TOKEN"]
     if not token:
         return jsonify({"error": "unavailable", "message": "教师发布暂未启用"}), 503
@@ -67,6 +66,26 @@ def problem_publish():
         supplied.encode("utf-8"), token.encode("utf-8")
     ):
         return jsonify({"error": "unauthorized", "message": "教师发布口令不正确"}), 401
+
+    return None
+
+
+@app.post("/api/teacher/form")
+def teacher_form():
+    error = teacher_access_error()
+    if error is not None:
+        return error
+
+    response = jsonify({"html": render_template("teacher_form.html")})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@app.post("/api/problems")
+def problem_publish():
+    error = teacher_access_error()
+    if error is not None:
+        return error
 
     try:
         problem = problem_store.publish(request.get_json(silent=True))
