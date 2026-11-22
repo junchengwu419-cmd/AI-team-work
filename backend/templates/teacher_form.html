@@ -1,0 +1,51 @@
+<section id="problem-management" aria-labelledby="problem-manage-title" hidden>
+  <h2 id="problem-manage-title">已发布题目</h2>
+  <fieldset id="problem-manage-fields">
+    <legend>管理已发布题目</legend>
+    <button id="teacher-problems-refresh" type="button">刷新题目</button>
+    <label>选择题目
+      <select id="teacher-problem-select">
+        <option value="">请选择题目</option>
+      </select>
+    </label>
+    <button id="problem-edit" type="button" disabled>编辑</button>
+    <button id="problem-remove" type="button" disabled>删除</button>
+  </fieldset>
+  <p id="problem-manage-status" role="status"></p>
+</section>
+
+<h2 id="problem-editor-title">发布课堂题目</h2>
+<form id="problem-publish" method="post" action="/api/problems" autocomplete="off">
+  <fieldset id="problem-fields">
+    <legend>题目与公开用例</legend>
+    <label>教师发布口令 <input name="token" type="password" required></label>
+    <label>题目标题 <input name="title" type="text" maxlength="120" required></label>
+    <label>题目说明 <textarea name="description" rows="4" maxlength="4000" required></textarea></label>
+    <div id="problem-cases"></div>
+    <button id="case-add" type="button">添加用例</button>
+    <button id="problem-save" type="submit">发布题目</button>
+    <button id="problem-cancel-edit" type="button" hidden>取消编辑</button>
+  </fieldset>
+  <p id="publish-status" role="status"></p>
+</form>
+<dialog id="problem-delete-dialog" aria-labelledby="problem-delete-title">
+  <h2 id="problem-delete-title">删除题目</h2>
+  <p>确认删除「<span id="problem-delete-name"></span>」？</p>
+  <form id="problem-delete" method="dialog" autocomplete="off">
+    <fieldset id="problem-delete-fields">
+      <legend>确认删除</legend>
+      <label>教师发布口令 <input name="token" type="password" required></label>
+      <button id="problem-cancel-delete" type="button">取消</button>
+      <button type="submit">确认删除</button>
+    </fieldset>
+    <p id="problem-delete-status" role="status"></p>
+  </form>
+</dialog>
+<template id="problem-case-template">
+  <fieldset class="problem-case">
+    <legend>公开用例</legend>
+    <label>标准输入 <textarea class="case-stdin" rows="2" maxlength="4000"></textarea></label>
+    <label>预期输出 <textarea class="case-expected" rows="2" maxlength="4000"></textarea></label>
+    <button class="case-remove" type="button">移除此用例</button>
+  </fieldset>
+</template>

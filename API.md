@@ -5,7 +5,7 @@
 网页输入一个 main.cpp 程序，点击运行，后端在沙箱中编译执行，
 网页显示输出或错误。
 
-本项目提供健康检查、编译运行和提交历史接口。
+本项目提供健康检查、编译运行、提交历史和课堂题目接口。
 接口由后端负责人 B 维护，修改前与相关成员确认。
 
 ## 2. 通用约定
@@ -161,3 +161,132 @@ HTTP 200
 返回 HTTP 200，包含 `id`、`createdAt`、`files`、`stdin` 和 `result`。`files` 是本次提交的文件快照，每项含 `name` 和 `content`。`result` 使用第 4 节的运行结果结构。
 
 找不到该记录或当前浏览器无法访问该记录时返回 HTTP 404。读取存储失败时返回 HTTP 500。
+
+## 8. 课堂题目与教师管理
+
+| 请求 | 网页上的操作 | 成功响应 |
+| --- | --- | --- |
+| `POST /api/teacher/form` | 教师验证口令，打开发题表单 | HTTP 200，返回表单 HTML |
+| `POST /api/problems` | 教师填写题目后点击发布 | HTTP 201，返回保存后的题目 |
+| `GET /api/problems` | 学生打开「课堂题目」或刷新列表 | HTTP 200，返回题目摘要列表 |
+| `GET /api/problems/<problem_id>` | 学生选中一道题 | HTTP 200，返回题目说明和公开用例 |
+| `PUT /api/problems/<problem_id>` | 教师保存对一道已发布题目的修改 | HTTP 200，返回更新后的完整题目 |
+| `DELETE /api/problems/<problem_id>` | 教师确认删除一道题 | HTTP 200，返回被删除题目的编号 |
+
+### 教师口令
+
+取表单、发布、编辑和删除题目都要在请求头 `Authorization` 中带上教师口令。后端用服务配置中的 `ONLINE_LAB_TEACHER_TOKEN` 核对。下面的 `<教师发布口令>` 代表教师当次输入的值。学生读取列表和详情可以直接访问。
+
+### 取发题表单
+
+教师在 `/teacher/` 点「验证并进入发题页」时发送请求。这一步只需要口令，请求体可以为空。
+
+```http
+POST /api/teacher/form
+Authorization: Bearer <教师发布口令>
+```
+
+口令正确时返回 HTTP 200。JSON 的 `html` 字段是完整的发题表单，浏览器把它显示在教师页上。下面只展示响应结构。
+
+```json
+{"html":"<h2>发布课堂题目</h2>..."}
+```
+
+响应带 `Cache-Control: no-store`，表示浏览器不应缓存这份表单。提交题目时会再核对一次口令。
+
+### 发布题目
+
+教师填写发题表单后，网页把口令和题目内容一起发给后端。口令在请求头，题目字段在 JSON 请求体。
+
+```http
+POST /api/problems
+Authorization: Bearer <教师发布口令>
+Content-Type: application/json
+```
+
+用「两数相加」作请求示例。
+
+```json
+{
+  "title": "两数相加",
+  "description": "输入两个整数，输出它们的和。",
+  "cases": [
+    {"stdin": "3 5", "expectedOutput": "8"}
+  ]
+}
+```
+
+| 字段 | 类型与限制 |
+| --- | --- |
+| `title` | 题目标题。必须是非空文本，最多 480 字节。 |
+| `description` | 题目说明。必须是非空文本，最多 16000 字节。 |
+| `cases` | 公开用例列表，必须有 1 到 10 组。 |
+| `cases[].stdin` | 用例输入。必须提供字符串，允许空字符串，最多 16000 字节。 |
+| `cases[].expectedOutput` | 预期输出。必须提供字符串，允许空字符串，最多 16000 字节。 |
+
+长度按 UTF-8 编码后的字节数计算。标题和说明只有空白时会被拒绝，保存前会去掉首尾空白。用例输入与预期输出保留原有的空格和换行。
+
+成功保存后返回 HTTP 201 和完整题目。后端生成 `id` 和 `createdAt`，示例中的编号和时间仅用于说明。`id` 是 32 位小写十六进制字符，`createdAt` 使用 UTC 时间。
+
+```json
+{
+  "id": "1234567890abcdef1234567890abcdef",
+  "createdAt": "2026-11-21T08:00:00+00:00",
+  "title": "两数相加",
+  "description": "输入两个整数，输出它们的和。",
+  "cases": [
+    {"stdin": "3 5", "expectedOutput": "8"}
+  ]
+}
+```
+
+### 读题目列表
+
+`GET /api/problems` 直接读取已发布题目的摘要，返回 HTTP 200。`items` 按发布时间从新到旧排列，每项只有 `id`、`title` 和 `createdAt`。暂无题目时返回 `{"items":[]}`。列表响应带 `Cache-Control: no-store`，刷新时可以重新读取。
+
+```json
+{
+  "items": [
+    {
+      "id": "1234567890abcdef1234567890abcdef",
+      "title": "两数相加",
+      "createdAt": "2026-11-21T08:00:00+00:00"
+    }
+  ]
+}
+```
+
+### 读题目详情
+
+`GET /api/problems/<problem_id>` 使用列表中拿到的 `id` 读完整题目。找到时返回 HTTP 200，JSON 字段与发布成功的响应相同。学生可以展示说明和公开用例，把 `stdin` 填入运行区。实际试跑仍使用原来的 `POST /api/run`。
+
+### 编辑已发布题目
+
+```http
+PUT /api/problems/<problem_id>
+Authorization: Bearer <教师发布口令>
+Content-Type: application/json
+```
+
+请求体提交修改后的完整标题、说明和公开用例，字段及限制与发布时相同。成功返回 HTTP 200 和更新后的题目，沿用原有的 `id` 和 `createdAt`。用同一个编号重新读取详情即可看到修改后的内容。
+
+### 删除已发布题目
+
+```http
+DELETE /api/problems/<problem_id>
+Authorization: Bearer <教师发布口令>
+```
+
+请求体可以为空。成功返回 HTTP 200 和 `{"id":"1234567890abcdef1234567890abcdef"}`。再次读取列表时，该题不会出现，直接访问该题的详情会返回 HTTP 404。
+
+### 常见失败响应
+
+错误 JSON 包含 `error` 和 `message`。教师接口先核对口令，发布和编辑接口还会检查题目内容。
+
+| HTTP 状态码 | `error` | 出现的情况 |
+| --- | --- | --- |
+| 400 | `bad_request` | 发布或编辑请求的 JSON 无效，或标题、说明、用例不合要求。 |
+| 401 | `unauthorized` | 教师接口缺少口令，或所填口令不正确。 |
+| 404 | `not_found` | 读取详情、编辑或删除时，题号格式无效或找不到对应题目。 |
+| 413 | `bad_request` | 请求体过大并由 Flask 拒绝时。 |
+| 503 | `unavailable` | 后端未配置教师发布口令，教师接口不可用。 |
