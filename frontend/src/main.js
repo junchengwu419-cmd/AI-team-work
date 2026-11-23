@@ -26,15 +26,11 @@ const editor = monaco.editor.create(
       ].join('\n'),
       'cpp'
     ),
-    theme: 'vs',
+    theme: 'vs-dark',
     automaticLayout: true,
     minimap: { enabled: false }
   }
 );
-
-document.querySelector('#read-code').addEventListener('click', () => {
-  document.querySelector('#result').textContent = editor.getValue();
-});
 
 const fileManager = setupFiles(editor, monaco);
 setupDraft(fileManager);

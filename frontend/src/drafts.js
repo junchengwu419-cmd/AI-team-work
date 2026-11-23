@@ -113,7 +113,7 @@ export function setupDraft(fileManager) {
       applying = true;
       fileManager.restoreSnapshot(initial);
       stdin.value = initial.stdin;
-      for (const id of ['stdout', 'stderr', 'result']) {
+      for (const id of ['stdout', 'stderr']) {
         const node = document.getElementById(id);
         if (node) node.textContent = '';
       }

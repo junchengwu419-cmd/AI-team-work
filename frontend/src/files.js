@@ -1,10 +1,13 @@
 // 每个代码文件使用独立的 Monaco model，切换时保留内容和撤销历史。
 export function setupFiles(editor, monaco) {
-  const select = document.getElementById('file-select');
+  const tabs = document.getElementById('file-tabs');
+  const naming = document.getElementById('file-naming');
+  const open = document.getElementById('open-file-name');
+  const cancel = document.getElementById('cancel-file-name');
+  const message = document.getElementById('file-message');
   const input = document.getElementById('new-file-name');
-  const add = document.getElementById('add-file');
   const remove = document.getElementById('delete-file');
-  if (!select || !input || !add || !remove) {
+  if (!tabs || !naming || !open || !cancel || !message || !input || !remove) {
     throw new Error('index.html 缺少文件操作区域');
   }
 
@@ -72,15 +75,19 @@ export function setupFiles(editor, monaco) {
     return true;
   }
 
+  //根据当前文件列表，动态生成网页上的文件标签按钮，并控制删除按钮是否可用。
   function render() {
-    select.replaceChildren();
+    tabs.replaceChildren();
     for (const name of files.keys()) {
-      const option = document.createElement('option');
-      option.value = name;
-      option.textContent = name;
-      select.append(option);
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.textContent = name;
+      tab.setAttribute('aria-pressed', String(name === current));
+      tab.addEventListener('click', () => {
+        if (!isLocked()) switchTo(name);
+      });
+      tabs.append(tab);
     }
-    select.value = current;
     remove.disabled = files.size === 1;
   }
 
@@ -91,42 +98,66 @@ export function setupFiles(editor, monaco) {
     const file = files.get(current);
     editor.setModel(file.model);
     if (file.view) editor.restoreViewState(file.view);
-    select.value = current;
+    render();
     editor.focus();
     notifyChange();
   }
 
-  select.addEventListener('change', () => {
-    if (isLocked()) {
-      select.value = current;
-      return;
-    }
-    switchTo(select.value);
+  //主要负责实现文件命名区域的打开、关闭、输入框初始化，以及键盘快捷操作。
+  //结合前面的 render() 函数来看，这部分代码进一步完善了文件操作界面：
+  //用户可以点击按钮打开文件命名区域，输入新文件名，也可以取消操作或按 Esc 键退出。
+  function closeNaming() {
+    naming.hidden = true;
+    input.value = '';
+    message.textContent = '';
+    open.setAttribute('aria-expanded', 'false');
+  }
+
+  open.addEventListener('click', () => {
+    if (isLocked()) return;
+    naming.hidden = false;
+    open.setAttribute('aria-expanded', 'true');
+    input.focus();
   });
 
-  add.addEventListener('click', () => {
+  cancel.addEventListener('click', () => {
+    closeNaming();
+    open.focus();
+  });
+
+  naming.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && !event.isComposing) {
+      event.preventDefault();
+      cancel.click();
+    }
+  });
+
+  naming.addEventListener('submit', event => {
+    event.preventDefault();
     if (isLocked()) return;
     const name = input.value.trim();
     if (!/^[A-Za-z0-9_.-]{1,128}$/.test(name) ||
         !/\.(cpp|h|hpp)$/.test(name)) {
-      window.alert('文件名使用英文字母、数字、下划线、横线或点，并以 .cpp、.h 或 .hpp 结尾。不能包含路径。');
+      message.textContent = '文件名使用英文字母、数字、下划线、横线或点，并以 .cpp、.h 或 .hpp 结尾。不能包含路径。';
+      input.focus();
       return;
     }
     if (files.has(name)) {
-      window.alert('文件名已存在，请换一个名称。');
+      message.textContent = '文件名已存在，请换一个名称。';
+      input.focus();
       return;
     }
     if (files.size >= 10) {
-      window.alert('最多添加 10 个文件。');
+      message.textContent = '最多添加 10 个文件。';
+      input.focus();
       return;
     }
     clearDiagnostics();
     const model = monaco.editor.createModel('', 'cpp');
     watchModel(model);
     files.set(name, { model, view: null });
+    closeNaming();
     switchTo(name);
-    input.value = '';
-    render();
   });
 
   remove.addEventListener('click', () => {

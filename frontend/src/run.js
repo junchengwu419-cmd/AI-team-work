@@ -89,7 +89,16 @@ export function setupRun(editor, getFiles, onNavigate, onDiagnostics = () => {})
         stderr.textContent = data.stderr || '（无错误信息）';
       }
       const label = getResultLabel(data.stage, data.exitCode);
-      status.textContent = `${label}；退出码：${data.exitCode}；耗时：${data.time} 毫秒`;
+      const outcome = document.createElement('strong');
+      if (data.exitCode === 124) outcome.className = 'outcome-timeout';
+      else if (data.exitCode === 0) outcome.className = 'outcome-success';
+      else outcome.className = 'outcome-error';
+      outcome.textContent = data.stage === 'run' && data.exitCode !== 0 && data.exitCode !== 124
+        ? `程序异常退出（${label}）` : label;
+      const meta = document.createElement('span');
+      meta.className = 'outcome-meta';
+      meta.textContent = `退出码 ${data.exitCode} · ${data.time} 毫秒`;
+      status.replaceChildren(outcome, ' ', meta);
     } catch (error) {
       status.textContent = '请求未完成';
       stderr.textContent = error.name === 'AbortError'

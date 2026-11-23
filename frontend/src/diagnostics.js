@@ -9,6 +9,7 @@ export function parseDiagnosticLine(line) {
   return { name: match[1], lineNumber, column };
 }
 
+//解析编译器或代码检查工具输出的错误信息，将其中的文件位置、错误类型和具体描述拆分，并将文件位置转换成可以点击的按钮。
 export function showDiagnostics(container, text, onNavigate) {
   container.replaceChildren();
   const lines = text.split('\n');
@@ -17,11 +18,16 @@ export function showDiagnostics(container, text, onNavigate) {
     if (location && typeof onNavigate === 'function') {
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = line;
+      const prefix = line.match(/^(.+?:\d+(?::\d+)?)(:\s*)(fatal error|error|warning|note)(:)/);
+      const [header, position, separator, kind, colon] = prefix;
+      button.className = 'diagnostic-position';
+      button.textContent = position;
       button.title = `跳到 ${location.name} 第 ${location.lineNumber} 行、第 ${location.column} 列`;
-      button.style.cssText = 'margin:0;padding:0;border:0;background:transparent;color:#0759b5;text-decoration:underline;cursor:pointer;font:inherit;white-space:pre-wrap;text-align:left;overflow-wrap:anywhere;';
+      const severity = document.createElement('span');
+      severity.className = kind.includes('error') ? 'diagnostic-error' : 'diagnostic-kind';
+      severity.textContent = kind;
       button.addEventListener('click', () => onNavigate(location));
-      container.append(button);
+      container.append(button, separator, severity, colon, line.slice(header.length));
     } else {
       container.append(document.createTextNode(line));
     }
