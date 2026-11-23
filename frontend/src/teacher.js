@@ -43,6 +43,36 @@ function setupTeacherProblems() {
   const cancelDelete = document.getElementById('problem-cancel-delete');
   let editingId = '';
 
+  // 复用验证口令后返回的表单，保留原有字段和校验。
+  const list = document.createElement('div');
+  list.className = 'problem-list';
+  select.closest('label').replaceWith(list);
+  const create = document.createElement('button');
+  create.type = 'button';
+  create.id = 'problem-new';
+  create.textContent = '＋ 新建题目';
+  list.before(create);
+  edit.remove();
+  refresh.textContent = '↻';
+  refresh.setAttribute('aria-label', '刷新题目');
+  refresh.title = '刷新题目';
+  manageFields.querySelector('legend').hidden = true;
+  fields.querySelector('legend').hidden = true;
+  form.prepend(editorTitle);
+  fields.prepend(remove);
+  remove.textContent = '删除题目';
+
+  const caseHeading = document.createElement('div');
+  caseHeading.className = 'case-heading';
+  const caseTitle = document.createElement('h3');
+  caseTitle.textContent = '公开用例';
+  cases.before(caseHeading);
+  caseHeading.append(caseTitle, add);
+  const actions = document.createElement('div');
+  actions.className = 'form-actions';
+  fields.append(actions);
+  actions.append(token.closest('label'), cancelEdit, save);
+
   function updateCases() {
     const count = cases.children.length;
     add.disabled = count >= 10;
@@ -80,6 +110,9 @@ function setupTeacherProblems() {
     editorTitle.textContent = problem ? '编辑课堂题目' : '发布课堂题目';
     save.textContent = problem ? '保存修改' : '发布题目';
     cancelEdit.hidden = !problem;
+    remove.hidden = !problem;
+    remove.disabled = !problem;
+    updateSelection();
     status.textContent = '';
   }
 
@@ -94,21 +127,26 @@ function setupTeacherProblems() {
     };
   }
 
-  function updateManagementButtons() {
-    edit.disabled = !select.value;
-    remove.disabled = !select.value;
+  function updateSelection() {
+    for (const button of list.children) {
+      button.setAttribute('aria-pressed', String(button.dataset.id === editingId));
+    }
   }
 
-  async function loadProblems(selectedId = select.value) {
+  async function loadProblems() {
     manageStatus.textContent = '正在读取题目……';
     try {
       const data = await requestJson('/api/problems');
-      select.replaceChildren(new Option('请选择题目', ''));
+      list.replaceChildren();
       for (const item of data.items) {
-        select.add(new Option(item.title, item.id));
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.dataset.id = item.id;
+        button.textContent = item.title;
+        button.addEventListener('click', () => openProblem(item.id));
+        list.append(button);
       }
-      if (data.items.some(item => item.id === selectedId)) select.value = selectedId;
-      updateManagementButtons();
+      updateSelection();
       manageStatus.textContent = data.items.length ? '' : '暂无已发布题目';
     } catch (error) {
       manageStatus.textContent = error.message;
@@ -130,16 +168,15 @@ function setupTeacherProblems() {
 
   showEditor();
   add.addEventListener('click', () => addCase());
-  cancelEdit.addEventListener('click', () => {
+  function newProblem() {
     showEditor();
     title.focus();
-  });
-  select.addEventListener('change', updateManagementButtons);
+  }
+  create.addEventListener('click', newProblem);
+  cancelEdit.addEventListener('click', newProblem);
   refresh.addEventListener('click', () => withControlsDisabled(loadProblems));
 
-  edit.addEventListener('click', async () => {
-    const problemId = select.value;
-    if (!problemId) return;
+  async function openProblem(problemId) {
     const loaded = await withControlsDisabled(async () => {
       manageStatus.textContent = '正在读取题目详情……';
       try {
@@ -153,7 +190,7 @@ function setupTeacherProblems() {
       }
     });
     if (loaded) title.focus();
-  });
+  }
 
   form.addEventListener('submit', event => {
     event.preventDefault();
@@ -173,7 +210,7 @@ function setupTeacherProblems() {
         const problem = await requestJson(path, options);
         showEditor();
         status.textContent = isEditing ? `已保存「${problem.title}」` : `已发布「${problem.title}」`;
-        await loadProblems(problem.id);
+        await loadProblems();
       } catch (error) {
         status.textContent = error.message;
       } finally {
@@ -183,8 +220,8 @@ function setupTeacherProblems() {
   });
 
   remove.addEventListener('click', () => {
-    if (!select.value) return;
-    deleteName.textContent = select.selectedOptions[0].textContent;
+    if (!editingId) return;
+    deleteName.textContent = list.querySelector('[aria-pressed="true"]')?.textContent ?? title.value;
     deleteStatus.textContent = '';
     deleteForm.reset();
     deleteDialog.showModal();
@@ -197,9 +234,8 @@ function setupTeacherProblems() {
   });
   deleteForm.addEventListener('submit', async event => {
     event.preventDefault();
-    const selected = select.selectedOptions[0];
-    const problemId = selected.value;
-    const problemTitle = selected.textContent;
+    const problemId = editingId;
+    const problemTitle = deleteName.textContent;
     const deleteToken = deleteForm.elements.token;
     const authorization = `Bearer ${deleteToken.value.trim()}`;
     deleteStatus.textContent = '正在删除……';
@@ -210,8 +246,7 @@ function setupTeacherProblems() {
           headers: { Authorization: authorization }
         });
         if (editingId === problemId) showEditor();
-        selected.remove();
-        updateManagementButtons();
+        await loadProblems();
         deleteDialog.close();
         manageStatus.textContent = `已删除「${problemTitle}」`;
         return true;
@@ -222,7 +257,7 @@ function setupTeacherProblems() {
         deleteToken.value = '';
       }
     });
-    if (deleted) select.focus();
+    if (deleted) create.focus();
     else deleteToken.focus();
   });
 
