@@ -102,4 +102,15 @@ export function setupStudentProblems() {
     stdin.dispatchEvent(new Event('input', { bubbles: true }));
     status.textContent = '已填入标准输入，点击「运行 C++」试跑';
   });
+
+  return function getCurrentCase() {
+    const item = activeCase();
+    if (!item) return null;
+    return {
+      title: activeProblem.title,
+      number: cases.selectedIndex + 1,
+      stdin: item.stdin,
+      expectedOutput: item.expectedOutput
+    };
+  };
 }

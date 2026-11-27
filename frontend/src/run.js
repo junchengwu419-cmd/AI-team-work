@@ -16,9 +16,18 @@ export function getResultLabel(stage, exitCode) {
   return `${phase}失败`;
 }
 
+//统一不同操作系统的换行符
+function normalizeLines(text) {
+  return text.replace(/\r\n?/g, '\n');
+}
+
+function comparableOutput(text) {
+  return normalizeLines(text).replace(/\n$/, '');
+}
+
 // 负责把 Monaco 中的代码交给已有 /api/run 接口。
 // main.js 传入编辑器、收集文件的方法和错误定位方法。
-export function setupRun(editor, getFiles, onNavigate, onDiagnostics = () => {}) {
+export function setupRun(editor, getFiles, onNavigate, onDiagnostics = () => {}, getCurrentCase = () => null) {
   const ids = ['run-code', 'stdin', 'run-status', 'stdout', 'stderr'];
   const nodes = ids.map((id) => document.getElementById(id));
   const missing = ids.filter((id, index) => !nodes[index]);
@@ -46,6 +55,9 @@ export function setupRun(editor, getFiles, onNavigate, onDiagnostics = () => {})
       files,
       stdin: stdin.value
     };
+    //获取在problems.js中修改的getCurrentCase()测试用例
+    const selected = getCurrentCase();
+    const matchesInput = selected && normalizeLines(selected.stdin) === normalizeLines(payload.stdin);
     onDiagnostics([]);
     running = true;
     button.disabled = true;
@@ -99,6 +111,19 @@ export function setupRun(editor, getFiles, onNavigate, onDiagnostics = () => {})
       meta.className = 'outcome-meta';
       meta.textContent = `退出码 ${data.exitCode} · ${data.time} 毫秒`;
       status.replaceChildren(outcome, ' ', meta);
+      //比较实际输出和预期输出并显示结果
+      if (matchesInput && data.stage === 'run' && data.exitCode === 0) {
+        const passed = comparableOutput(data.stdout) === comparableOutput(selected.expectedOutput);
+        const verdict = document.createElement('strong');
+        verdict.className = passed ? 'outcome-success' : 'outcome-error';
+        verdict.textContent = `《${selected.title}》用例 ${selected.number} ${passed ? '通过' : '未通过'}`;
+        status.append(' · ', verdict);
+        if (!passed) {
+          const expected = document.createElement('pre');
+          expected.textContent = `预期输出：\n${selected.expectedOutput || '（空）'}`;
+          status.append(expected);
+        }
+      }
     } catch (error) {
       status.textContent = '请求未完成';
       stderr.textContent = error.name === 'AbortError'

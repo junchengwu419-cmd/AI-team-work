@@ -34,11 +34,12 @@ const editor = monaco.editor.create(
 
 const fileManager = setupFiles(editor, monaco);
 setupDraft(fileManager);
+const getCurrentCase = setupStudentProblems();
 setupRun(
   editor,
   () => fileManager.getFiles(),
   location => fileManager.goTo(location),
-  items => fileManager.setDiagnostics(items)
+  items => fileManager.setDiagnostics(items),
+  getCurrentCase
 );
 setupHistory();
-setupStudentProblems();
