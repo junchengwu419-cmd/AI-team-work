@@ -33,8 +33,8 @@ const editor = monaco.editor.create(
 );
 
 const fileManager = setupFiles(editor, monaco);
-setupDraft(fileManager);
-const getCurrentCase = setupStudentProblems();
+const drafts = setupDraft(fileManager);
+const getCurrentCase = setupStudentProblems(drafts.switchProblem);
 setupRun(
   editor,
   () => fileManager.getFiles(),

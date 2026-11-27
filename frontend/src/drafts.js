@@ -41,6 +41,7 @@ export function setupDraft(fileManager) {
   controls.append(reset, status);
 
   const initial = { version: 1, ...fileManager.getSnapshot(), stdin: stdin.value };
+  let key = DRAFT_KEY;
   let storage;
   let timer;
   let dirty = false;
@@ -50,12 +51,12 @@ export function setupDraft(fileManager) {
 
   try {
     storage = window.localStorage;
-    const text = storage.getItem(DRAFT_KEY);
+    const text = storage.getItem(key);
     if (text !== null) {
       const draft = parseDraft(text);
       fileManager.restoreSnapshot(draft);
       stdin.value = draft.stdin;
-      lastSaved = JSON.stringify(draft);
+      lastSaved = text;
       status.textContent = '已恢复本浏览器的草稿。';
     } else {
       status.textContent = '修改代码或输入后，将自动保存到本浏览器。';
@@ -71,7 +72,11 @@ export function setupDraft(fileManager) {
     try {
       const draft = parseDraft(JSON.stringify({ version: 1, ...fileManager.getSnapshot(), stdin: stdin.value }));
       const text = JSON.stringify(draft);
-      if (text !== lastSaved) storage.setItem(DRAFT_KEY, text);
+      if (storage.getItem(key) !== lastSaved) {
+        paused = true;
+        throw new Error('本题草稿已在其他标签页更改');
+      }
+      if (text !== lastSaved) storage.setItem(key, text);
       lastSaved = text;
       dirty = false;
       status.textContent = '草稿已保存到本浏览器。';
@@ -81,8 +86,9 @@ export function setupDraft(fileManager) {
   }
 
   function schedule() {
-    if (paused || applying) return;
+    if (applying) return;
     dirty = true;
+    if (paused) return;
     clearTimeout(timer);
     status.textContent = '草稿待保存……';
     timer = setTimeout(saveNow, 500);
@@ -95,7 +101,7 @@ export function setupDraft(fileManager) {
     if (document.visibilityState === 'hidden') saveNow();
   });
   window.addEventListener('storage', event => {
-    if (event.key !== DRAFT_KEY && event.key !== null) return;
+    if (event.key !== key && event.key !== null) return;
     clearTimeout(timer);
     paused = true;
     status.textContent = '其他同地址标签页修改了草稿，自动保存已暂停。请先复制当前重要代码，再刷新读取最新草稿。';
@@ -103,13 +109,13 @@ export function setupDraft(fileManager) {
 
   reset.addEventListener('click', () => {
     if (!fileManager.canEdit()) return;
-    if (!window.confirm('恢复初始 main.cpp 和标准输入？当前全部文件及本浏览器该地址的草稿将被替换。')) return;
+    if (!window.confirm('恢复初始 main.cpp 和标准输入？仅替换当前练习的文件和标准输入。')) return;
     clearTimeout(timer);
     try {
       // 先确认能保存，失败时保留页面当前内容。
       const text = JSON.stringify(initial);
       storage = window.localStorage;
-      storage.setItem(DRAFT_KEY, text);
+      storage.setItem(key, text);
       applying = true;
       fileManager.restoreSnapshot(initial);
       stdin.value = initial.stdin;
@@ -130,5 +136,31 @@ export function setupDraft(fileManager) {
     }
   });
 
-  return { saveNow };
+  function switchProblem(id) {
+    const nextKey = id ? DRAFT_KEY + ':' + id : DRAFT_KEY;
+    if (nextKey === key) return;
+    if (!fileManager.canEdit()) throw new Error('请等运行结束后再切题');
+    saveNow();
+    if (dirty) throw new Error('当前草稿未保存，请先复制代码再切题');
+    storage = window.localStorage;
+    const text = storage.getItem(nextKey);
+    const next = text === null ? initial : parseDraft(text);
+    applying = true;
+    try {
+      fileManager.restoreSnapshot(next);
+      stdin.value = next.stdin;
+      key = nextKey;
+      paused = false;
+      lastSaved = text;
+      for (const id of ['stdout', 'stderr']) {
+        document.getElementById(id).textContent = '';
+      }
+      document.getElementById('run-status').textContent = '等待运行';
+      status.textContent = text === null ? '新练习，修改后自动保存。' : '已恢复此练习的草稿。';
+    } finally {
+      applying = false;
+    }
+  }
+
+  return { saveNow, switchProblem };
 }

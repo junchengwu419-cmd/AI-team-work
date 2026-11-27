@@ -17,7 +17,7 @@ async function requestJson(path) {
   }
 }
 
-export function setupStudentProblems() {
+export function setupStudentProblems(switchProblem) {
   const panel = document.getElementById('student-problems');
   const refresh = document.getElementById('problems-refresh');
   const select = document.getElementById('problem-select');
@@ -31,21 +31,26 @@ export function setupStudentProblems() {
   async function loadList() {
     refresh.disabled = true;
     select.disabled = true;
-    detail.hidden = true;
-    activeProblem = null;
-    select.replaceChildren(new Option('请选择题目', ''));
     status.textContent = '正在读取题目……';
     try {
       const data = await requestJson('/api/problems');
+      let preferred = activeProblem?.id || '';
+      if (!loaded) {
+        try { preferred = sessionStorage.getItem('online-lab:selected-problem') || ''; } catch {}
+      }
+      select.replaceChildren(new Option('自由练习（未选题）', ''));
       for (const item of data.items) {
         select.add(new Option(item.title, item.id));
       }
-      select.disabled = data.items.length === 0;
-      status.textContent = data.items.length ? '' : '暂无已发布题目';
+      const available = data.items.some(item => item.id === preferred);
+      await selectProblem(available ? preferred : '');
+      if (!data.items.length) status.textContent = '暂无已发布题目';
       loaded = true;
     } catch (error) {
+      select.value = activeProblem?.id || '';
       status.textContent = error.message;
     } finally {
+      select.disabled = false;
       refresh.disabled = false;
     }
   }
@@ -64,27 +69,30 @@ export function setupStudentProblems() {
     if (panel.open && !loaded && !refresh.disabled) loadList();
   });
   refresh.addEventListener('click', loadList);
-  select.addEventListener('change', async () => {
-    detail.hidden = true;
-    activeProblem = null;
+  async function selectProblem(id) {
+    const problem = id ? await requestJson('/api/problems/' + encodeURIComponent(id)) : null;
+    switchProblem(id);
+    activeProblem = problem;
+    select.value = id;
+    detail.hidden = !problem;
     status.textContent = '';
-    if (!select.value) return;
+    try { sessionStorage.setItem('online-lab:selected-problem', id); } catch {}
+    if (!problem) return;
+    document.getElementById('problem-title').textContent = problem.title;
+    document.getElementById('problem-description').textContent = problem.description;
+    cases.replaceChildren(...problem.cases.map((_, index) => new Option('用例 ' + (index + 1))));
+    showCase();
+  }
 
+  select.addEventListener('change', async () => {
     refresh.disabled = true;
     select.disabled = true;
-    status.textContent = '正在读取题目详情……';
+    status.textContent = '正在切换练习……';
     try {
-      const problem = await requestJson(`/api/problems/${encodeURIComponent(select.value)}`);
-      document.getElementById('problem-title').textContent = problem.title;
-      document.getElementById('problem-description').textContent = problem.description;
-      cases.replaceChildren(...problem.cases.map((_, index) => new Option(`用例 ${index + 1}`)));
-      activeProblem = problem;
-      showCase();
-      detail.hidden = false;
-      status.textContent = '';
+      await selectProblem(select.value);
     } catch (error) {
+      select.value = activeProblem?.id || '';
       status.textContent = error.message;
-      select.value = '';
     } finally {
       select.disabled = false;
       refresh.disabled = false;

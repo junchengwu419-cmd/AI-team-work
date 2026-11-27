@@ -116,7 +116,7 @@ export function setupRun(editor, getFiles, onNavigate, onDiagnostics = () => {},
         const passed = comparableOutput(data.stdout) === comparableOutput(selected.expectedOutput);
         const verdict = document.createElement('strong');
         verdict.className = passed ? 'outcome-success' : 'outcome-error';
-        verdict.textContent = `《${selected.title}》用例 ${selected.number} ${passed ? '通过' : '未通过'}`;
+        verdict.textContent = `用例 ${selected.number} ${passed ? '通过' : '未通过'}`;
         status.append(' · ', verdict);
         if (!passed) {
           const expected = document.createElement('pre');
