@@ -5,42 +5,64 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>教师端 - 在线实验室</title>
   <style>
-    body {
-      max-width: 1000px;
-      margin: 24px auto;
-      padding: 0 16px;
-      font-family: sans-serif;
-    }
-
-    fieldset {
-      margin: 16px 0;
-    }
-
-    label {
-      display: block;
-      margin: 12px 0;
-    }
-
-    input, textarea {
-      display: block;
-      width: min(100%, 36rem);
-      box-sizing: border-box;
-    }
-
-    button {
-      margin-top: 16px;
-      padding: 8px 16px;
+    :root { font: 16px/1.5 "Segoe UI", "Microsoft YaHei", sans-serif; color: #192338; background: #f3f5f8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header { background: white; border-bottom: 1px solid #d4dbe5; }
+    nav { max-width: 1500px; margin: auto; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    h1 { margin: 0; font-size: 1.35rem; }
+    .mark { padding: 2px 7px; border-radius: 5px; color: white; background: #1559da; font: bold 1.2rem monospace; }
+    a { color: #174fc5; text-decoration: none; }
+    #teacher-access, #problem-management, #problem-publish, dialog { background: white; border: 1px solid #d0d7e2; border-radius: 7px; padding: 20px; min-width: 0; }
+    #teacher-access { max-width: 420px; margin: 8vh auto; width: calc(100% - 32px); }
+    #teacher-view { display: grid; grid-template-columns: minmax(220px, 27%) minmax(0, 1fr); align-items: start; gap: 14px; max-width: 1500px; padding: 16px; margin: auto; }
+    h2 { font-size: 1.16rem; margin: 0 0 12px; }
+    fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+    button, input, textarea { font: inherit; color: inherit; border: 1px solid #aebaca; border-radius: 5px; background: white; padding: 7px 10px; }
+    input, textarea { display: block; width: 100%; margin: 4px 0 14px; }
+    textarea { resize: vertical; }
+    button { cursor: pointer; }
+    button:disabled { opacity: .55; cursor: default; }
+    #teacher-open, #problem-save, #problem-new { color: white; background: #1559da; border-color: #1559da; }
+    #teacher-open, #problem-new { width: 100%; }
+    #problem-management, #problem-publish { position: relative; }
+    #problem-editor-title, #problem-manage-title { padding-right: 5em; }
+    #teacher-problems-refresh, #problem-remove { position: absolute; right: 16px; top: 14px; }
+    #problem-remove { color: #a32826; }
+    .problem-list { display: grid; gap: 4px; margin-top: 10px; }
+    .problem-list button { text-align: left; overflow-wrap: anywhere; border-color: transparent; }
+    .problem-list [aria-pressed="true"] { color: #174fc5; background: #e8efff; border-color: #aec4f1; }
+    .case-heading, .form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .case-heading { margin: 18px 0 10px; }
+    .case-heading h3 { margin: 0; font-size: 1rem; }
+    .problem-case { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; padding: 12px; margin: 12px 0; background: #f3f5f8; border-radius: 5px; }
+    .problem-case legend { font-weight: 600; }
+    .problem-case textarea { margin-bottom: 0; font-family: Consolas, monospace; }
+    .case-remove { justify-self: start; }
+    .case-remove:disabled { display: none; }
+    .form-actions { border-top: 1px solid #d4dbe5; padding-top: 14px; }
+    .form-actions label { margin-right: auto; }
+    .form-actions input { margin-bottom: 0; }
+    dialog { width: min(420px, 92vw); }
+    dialog::backdrop { background: #17233866; }
+    [hidden], p[role="status"]:empty { display: none !important; }
+    @media (max-width: 760px) {
+      #teacher-view, .problem-case { grid-template-columns: minmax(0, 1fr); }
+      nav { padding: 10px; }
+      h1 { font-size: 1.04rem; }
     }
   </style>
 </head>
 <body>
-  <a href="/">返回实验室</a>
-  <h1>教师端</h1>
+  <header><nav aria-label="教师页导航">
+    <h1><span class="mark" aria-hidden="true">&gt;_</span> 在线 C++ 实验室 · 教师端</h1>
+    <a href="/">返回实验室</a>
+  </nav></header>
 
   <form id="teacher-access" method="post" action="/api/teacher/form" autocomplete="off">
     <label for="teacher-token">教师发布口令</label>
     <input id="teacher-token" type="password" required>
-    <button id="teacher-open" type="submit">验证并进入发题页</button>
+    <button id="teacher-open" type="submit">进入教师页</button>
     <p id="teacher-access-status" role="status"></p>
   </form>
   <section id="teacher-view" hidden></section>
